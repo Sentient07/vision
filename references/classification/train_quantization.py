@@ -51,6 +51,7 @@ def main(args):
     print("Creating model", args.model)
     # when training quantized models, we always start from a pre-trained fp32 reference model
     model = torchvision.models.quantization.__dict__[args.model](pretrained=True, quantize=args.test_only)
+    model.to(device)
 
     if not (args.test_only or args.post_training_quantize):
         model.fuse_model()
@@ -65,7 +66,8 @@ def main(args):
                                                        step_size=args.lr_step_size,
                                                        gamma=args.lr_gamma)
 
-    model.to(device)
+    if args.distributed and args.sync_bn:
+        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 
     criterion = nn.CrossEntropyLoss()
     model_without_ddp = model
@@ -222,6 +224,12 @@ def parse_args():
         dest="cache_dataset",
         help="Cache the datasets for quicker initialization. \
              It also serializes the transforms",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--sync-bn",
+        dest="sync_bn",
+        help="Use sync batch norm",
         action="store_true",
     )
     parser.add_argument(
